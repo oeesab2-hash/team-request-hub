@@ -1,0 +1,228 @@
+---
+name: web-deploy-online
+description: |
+  Skill สำหรับสร้างและ deploy web app ขึ้น internet แบบครบวงจร ตั้งแต่สร้างไฟล์ HTML/CSS/JS, 
+  ตั้งค่า Git, push ขึ้น GitHub, เปิด GitHub Pages, และเชื่อมต่อ Supabase เป็น database 
+  ใช้ skill นี้ทุกครั้งที่ผู้ใช้พูดถึง: "ขึ้นเว็บ", "deploy", "GitHub Pages", "host เว็บ", 
+  "เว็บออนไลน์", "เชื่อม database", "Supabase", "เก็บข้อมูลจริง", "ทีมใช้ร่วมกัน" 
+  หรือต้องการสร้าง web app ที่เข้าถึงได้จาก internet
+---
+
+# Web Deploy Online Skill
+
+คู่มือ deploy web app ขึ้น internet แบบครบวงจร ใช้ GitHub Pages (free hosting) + Supabase (free database)
+
+---
+
+## 🗺️ Overview Flow
+
+```
+1. สร้างไฟล์ index.html
+      ↓
+2. Git init + commit
+      ↓
+3. สร้าง GitHub repo + push
+      ↓
+4. เปิด GitHub Pages
+      ↓
+5. (ถ้าต้องการ database) เชื่อม Supabase
+```
+
+---
+
+## Phase 1 — สร้างไฟล์ index.html
+
+สร้างไฟล์ใน `/home/claude/<project-name>/index.html`
+
+**checklist ที่ต้องมีใน index.html:**
+- `<meta charset="UTF-8">` และ `<meta name="viewport">`
+- Font: Noto Sans Thai จาก Google Fonts (ถ้าเป็นเว็บภาษาไทย)
+- CSS และ JS อยู่ในไฟล์เดียวกัน (single file)
+- ถ้าใช้ Supabase: `<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>`
+
+---
+
+## Phase 2 — Git Setup
+
+```bash
+cd /home/claude/<project-name>
+
+# Init
+git init
+git branch -m main
+git config user.email "dev@project.com"
+git config user.name "Project Team"
+
+# สร้างไฟล์พื้นฐาน
+echo "# <Project Name>" > README.md
+echo "node_modules/\n.env\n*.log\n.DS_Store" > .gitignore
+
+# First commit
+git add .
+git commit -m "feat: initial commit"
+```
+
+---
+
+## Phase 3 — GitHub Repository
+
+### 3.1 ผู้ใช้ต้องทำเอง (yuyi ทำไม่ได้)
+1. ไปที่ `https://github.com/new`
+2. ตั้งชื่อ repo
+3. กด **Create repository**
+
+### 3.2 เชื่อม remote แล้ว push
+```bash
+# เชื่อม remote (ใช้ URL จริงจาก GitHub)
+git remote add origin https://github.com/<username>/<repo-name>.git
+
+# Push
+git push -u origin main
+```
+
+> **ถ้า GitHub ถาม credentials:**
+> - Username: GitHub username
+> - Password: **Personal Access Token** (ไม่ใช่ password จริง)
+> 
+> สร้าง Token ที่: `https://github.com/settings/tokens/new`
+> → ติ๊ก ✅ **repo** → Generate → Copy
+
+---
+
+## Phase 4 — GitHub Pages (Free Hosting)
+
+### 4.1 เปิด Pages
+1. ไปที่ GitHub repo → **Settings** → **Pages** (เมนูซ้าย)
+2. ถ้าเห็น "Upgrade or make this repository public":
+   - ไปที่ **Settings → General → Danger Zone**
+   - คลิก **Change visibility → Make public**
+   - กลับมาที่ **Pages**
+3. ตั้งค่า:
+   - Source: **Deploy from a branch**
+   - Branch: **main** / **(root)**
+   - กด **Save**
+4. รอ 1-2 นาที → refresh → จะเห็น link
+
+### 4.2 URL ที่ได้
+```
+https://<username>.github.io/<repo-name>/
+```
+
+---
+
+## Phase 5 — Supabase Database (ถ้าต้องการ)
+
+### 5.1 สมัครและสร้าง Project
+1. ไปที่ `https://supabase.com` → Sign up with GitHub
+2. **New project** → ตั้งชื่อ → เลือก Region: **Southeast Asia (Singapore)**
+3. รอ 1-2 นาทีให้ project พร้อม
+
+### 5.2 สร้าง Table ด้วย SQL Editor
+ไปที่ **SQL Editor** แล้วรัน SQL ตามโครงสร้างที่ต้องการ ตัวอย่าง:
+
+```sql
+create table requests (
+  id         bigint generated always as identity primary key,
+  name       text not null,
+  detail     text not null,
+  status     text not null default 'pending',
+  created_at timestamptz default now()
+);
+
+-- เปิด Row Level Security
+alter table requests enable row level security;
+
+-- Policy: ให้ทุกคน read/write ได้ (internal tool)
+create policy "allow all" on requests
+  for all using (true) with check (true);
+```
+
+### 5.3 เอา API Keys
+ไปที่ **Settings → API Keys** แล้วเอา:
+- **Project URL**: `https://xxxx.supabase.co`
+- **Anon Key**: `eyJhbGc...` (ใช้อันนี้เท่านั้น ไม่ใช้ service_role)
+
+### 5.4 ใส่ในโค้ด index.html
+```javascript
+const SUPABASE_URL = 'https://xxxx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGc...';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+```
+
+### 5.5 CRUD patterns
+```javascript
+// Read
+const { data } = await db.from('table').select('*').order('created_at', {ascending:false});
+
+// Create
+const { data } = await db.from('table').insert([{...}]).select();
+
+// Update
+await db.from('table').update({status: 'done'}).eq('id', id);
+
+// Delete
+await db.from('table').delete().eq('id', id);
+
+// Real-time
+db.channel('changes')
+  .on('postgres_changes', {event:'*', schema:'public', table:'table'}, () => loadAll())
+  .subscribe();
+```
+
+---
+
+## Phase 6 — Update & Redeploy
+
+เมื่อต้องการอัปเดตเว็บ:
+
+```bash
+# แก้ไขไฟล์แล้วรัน
+git add .
+git commit -m "feat: <อธิบายการเปลี่ยนแปลง>"
+git push origin main
+```
+
+GitHub Pages จะ auto-deploy ภายใน 1-2 นาทีค่า
+
+---
+
+## 🚨 Common Errors & Fixes
+
+| Error | สาเหตุ | วิธีแก้ |
+|---|---|---|
+| `fatal: not a git repository` | ยังไม่ได้ `git init` หรืออยู่ผิด folder | `cd <project-folder>` ก่อน |
+| `nothing to commit` | ไฟล์ไม่ได้เปลี่ยน | ตรวจสอบว่า copy ไฟล์ใหม่แล้วหรือยัง |
+| `error: src refspec does not match` | branch ชื่อผิด | `git branch` เพื่อดูชื่อจริง |
+| Pages แสดง "Upgrade to enable" | repo เป็น Private | Settings → Danger Zone → Make public |
+| Supabase แสดง error 401 | ใช้ wrong key | ใช้ `anon` key ไม่ใช่ `service_role` |
+| `Copy-Item cannot find path` | ไฟล์ไม่ได้อยู่ใน Downloads | download ไฟล์ใหม่ก่อน |
+
+---
+
+## 📋 Quick Checklist
+
+```
+□ สร้าง index.html ครบถ้วน
+□ git init + branch -m main
+□ สร้าง README.md + .gitignore
+□ git add . && git commit
+□ สร้าง GitHub repo (Public)
+□ git remote add origin <URL>
+□ git push -u origin main
+□ Settings → Pages → main/(root) → Save
+□ ทดสอบ URL: https://<user>.github.io/<repo>/
+□ (ถ้ามี DB) สร้าง Supabase project + table
+□ ใส่ Supabase URL + Anon Key ใน index.html
+□ push อีกครั้ง
+□ ทดสอบ CRUD ทำงานได้
+```
+
+---
+
+## 💡 Tips
+
+- **GitHub Pages** deploy อัตโนมัติทุกครั้งที่ push ไป `main`
+- **Supabase free tier** มี 500MB storage และ 50,000 requests/เดือน เพียงพอสำหรับ internal tool
+- ถ้าเว็บใช้ภาษาไทย ใส่ `font-family: 'Noto Sans Thai'` เสมอ
+- Real-time sync ทำให้ทีมเห็นข้อมูลพร้อมกันโดยไม่ต้อง refresh
